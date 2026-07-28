@@ -263,10 +263,13 @@ async function onFile(input){
       })
     });
     if(!ANTHROPIC_API_KEY){throw new Error("API key not configured. Please contact IMS.");}
-    var data=await resp.json();
-    if(data.error){throw new Error("API error: "+data.error.message);}
+    var respText=await resp.text();
+    if(!respText){throw new Error("Empty response from API. Status: "+resp.status+". Check internet connection.");}
+    var data;
+    try{data=JSON.parse(respText);}catch(pe){throw new Error("API response (status "+resp.status+"): "+respText.slice(0,200));}
+    if(data.error){throw new Error("API error ("+data.error.type+"): "+data.error.message);}
     var raw=(data.content&&data.content[0]&&data.content[0].text)||"";
-    if(!raw){throw new Error("No data returned from API. Try again.");}
+    if(!raw){throw new Error("No content in API response. Full: "+respText.slice(0,300));}
     extracted=JSON.parse(raw.replace(/```json|```/g,"").trim());
     uz.className="upload-zone ready";
     uz.innerHTML="<div class='upload-icon'>&#9989;</div><div class='upload-main'>"+file.name+"</div><div class='upload-sub'>Click to re-upload</div>";
