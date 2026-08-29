@@ -224,7 +224,7 @@ const NOBATCH_VALUE="__nobatch__";
 const NONAME_VALUE="__noname__";
 const GDPI_BATCH="GDPI";
 
-let selBatch="",selStudent=null,extracted=null,photoData=null;
+let selBatch="",selStudent=null,extracted=null,photoData=null,pdfData=null;
 const BATCHES=Object.keys(BATCH_DATA).sort();
 const bSel=document.getElementById("batchSel");
 BATCHES.forEach(function(b){const o=document.createElement("option");o.value=b;o.textContent=b;bSel.appendChild(o);});
@@ -314,6 +314,7 @@ function onManualContinue(){
 }
 
 function resetUpload(){
+  pdfData=null;
   const uz=el("uploadZone");
   uz.className="upload-zone";
   uz.innerHTML="<div class='upload-icon'>&#128228;</div><div class='upload-main'>Click to upload PDF</div><div class='upload-sub'>CAT 2026 registration form only</div>";
@@ -405,6 +406,7 @@ async function onFile(input){
     try{parsed=JSON.parse(cleaned);}catch(pe){throw new Error("Extraction service response: "+cleaned.slice(0,200));}
     if(parsed&&parsed.error){throw new Error("Extraction error: "+(parsed.error.message||JSON.stringify(parsed.error)));}
     extracted=parsed;
+    pdfData={base64:b64,filename:file.name};
     uz.className="upload-zone ready";
     uz.innerHTML="<div class='upload-icon'>&#9989;</div><div class='upload-main'>"+file.name+"</div><div class='upload-sub'>Click to re-upload</div>";
     checkBothReady();
@@ -439,7 +441,7 @@ async function onSubmit(){
   el("submitBtn").disabled=true;
   el("submitBtn").innerHTML="<span class='spinner spinner-dark'></span> Submitting&hellip;";
   try{
-    const payload={timestamp:new Date().toLocaleString("en-IN"),name:selStudent.name,batch:selBatch,imsPin:selStudent.ims_id,catUserId:extracted.catUserId,dob:extracted.dateOfBirth,email:extracted.primaryEmail,mobile:extracted.mobile,tenth:extracted.tenth,twelfth:extracted.twelfth,gradDegree:extracted.gradDegree,gradDegreeOthers:extracted.gradDegreeOthers,gradCollege:extracted.gradCollege,gradUniversity:extracted.gradUniversity,gradUniversityOthers:extracted.gradUniversityOthers,gradPercentage:extracted.gradPercentage,mastersOrPro:extracted.mastersOrPro,workExMonths:extracted.workExMonths,category:extracted.category,photoBase64:photoData?photoData.base64:"",photoMime:photoData?photoData.mime:"",photoFilename:photoData?(selStudent.ims_id+".jpg"):""};
+    const payload={timestamp:new Date().toLocaleString("en-IN"),name:selStudent.name,batch:selBatch,imsPin:selStudent.ims_id,catUserId:extracted.catUserId,dob:extracted.dateOfBirth,email:extracted.primaryEmail,mobile:extracted.mobile,tenth:extracted.tenth,twelfth:extracted.twelfth,gradDegree:extracted.gradDegree,gradDegreeOthers:extracted.gradDegreeOthers,gradCollege:extracted.gradCollege,gradUniversity:extracted.gradUniversity,gradUniversityOthers:extracted.gradUniversityOthers,gradPercentage:extracted.gradPercentage,mastersOrPro:extracted.mastersOrPro,workExMonths:extracted.workExMonths,category:extracted.category,photoBase64:photoData?photoData.base64:"",photoMime:photoData?photoData.mime:"",photoFilename:photoData?(selStudent.ims_id+".jpg"):"",pdfBase64:pdfData?pdfData.base64:"",pdfFilename:pdfData?(selStudent.ims_id+".pdf"):""};
     var sr=await fetch(APPS_SCRIPT_URL,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},body:JSON.stringify(Object.assign({action:"submit"},payload))});
     var st=await sr.text();
     if(st!=="OK")throw new Error(st);
