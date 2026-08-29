@@ -161,8 +161,18 @@ select:focus{border-color:#1F3864;background-color:#fff}
   </div>
 
   <div class="card" id="card3" style="display:none">
-    <div class="card-header"><div class="card-num">3</div><div class="card-title">Upload your CAT registration PDF</div></div>
-    <p class="hint">Log in to the CAT portal &rarr; click <strong>&ldquo;App View PDF&rdquo;</strong> next to Application Details &rarr; download and upload here.</p>
+    <div class="card-header"><div class="card-num">3</div><div class="card-title">Upload your photo &amp; CAT registration PDF</div></div>
+
+    <p class="hint"><strong>Photo:</strong> upload the same passport-style photo you uploaded on your CAT &lsquo;26 application.</p>
+    <input type="file" id="photoIn" accept="image/*" style="display:none" onchange="onPhoto(this)"/>
+    <div class="upload-zone" id="photoZone" onclick="document.getElementById('photoIn').click()">
+      <div class="upload-icon">&#128247;</div>
+      <div class="upload-main">Click to upload your photo</div>
+      <div class="upload-sub">JPG or PNG</div>
+    </div>
+    <div class="err-bar" id="photoErrBar" style="display:none"></div>
+
+    <p class="hint" style="margin-top:18px">Log in to the CAT portal &rarr; click <strong>&ldquo;App View PDF&rdquo;</strong> next to Application Details &rarr; download and upload here.</p>
     <input type="file" id="fileIn" accept="application/pdf" style="display:none" onchange="onFile(this)"/>
     <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileIn').click()">
       <div class="upload-icon">&#128228;</div>
@@ -174,6 +184,9 @@ select:focus{border-color:#1F3864;background-color:#fff}
 
   <div class="card" id="card4" style="display:none">
     <div class="card-header"><div class="card-num">4</div><div class="card-title">Review &amp; confirm</div></div>
+    <div id="reviewPhotoWrap" style="display:none;text-align:center;margin-bottom:12px">
+      <img id="reviewPhoto" style="width:84px;height:84px;object-fit:cover;border-radius:50%;border:2px solid #1F3864"/>
+    </div>
     <div class="banner" id="banner"></div>
     <div class="fields" id="fields"></div>
     <button class="submit-btn" id="submitBtn" onclick="onSubmit()">&#10003;&nbsp; Confirm &amp; Submit</button>
@@ -212,7 +225,7 @@ const NOBATCH_VALUE="__nobatch__";
 const NONAME_VALUE="__noname__";
 const GDPI_BATCH="GDPI";
 
-let selBatch="",selStudent=null,extracted=null;
+let selBatch="",selStudent=null,extracted=null,photoData=null;
 const BATCHES=Object.keys(BATCH_DATA).sort();
 const bSel=document.getElementById("batchSel");
 BATCHES.forEach(function(b){const o=document.createElement("option");o.value=b;o.textContent=b;bSel.appendChild(o);});
@@ -234,7 +247,7 @@ function resetManual(){
 }
 
 function onBatch(){
-  selBatch=bSel.value;selStudent=null;extracted=null;
+  selBatch=bSel.value;selStudent=null;extracted=null;photoData=null;
   hide("card2");hide("card3");hide("card4");
   setStep(selBatch?2:1);
   resetManual();
@@ -267,18 +280,19 @@ function onBatch(){
 function onName(){
   const id=el("nameSel").value;
   if(id===NONAME_VALUE){
-    selStudent=null;extracted=null;hide("card3");hide("card4");hide("pinRow");setStep(2);
+    selStudent=null;extracted=null;photoData=null;hide("card3");hide("card4");hide("pinRow");setStep(2);
     resetManual();
     show("manualEntry");
     return;
   }
   resetManual();
   selStudent=(BATCH_DATA[selBatch]||[]).find(function(s){return s.ims_id===id;})||null;
-  extracted=null;hide("card3");hide("card4");
+  extracted=null;photoData=null;hide("card3");hide("card4");
   if(!selStudent){hide("pinRow");setStep(2);return;}
   el("pinVal").textContent=selStudent.ims_id;
   show("pinRow");show("card3");setStep(3);
   resetUpload();hide("errBar");
+  resetPhotoZone();hide("photoErrBar");
 }
 
 function onManualInput(){
@@ -293,10 +307,11 @@ function onManualContinue(){
   const needBatch=el("manualBatchField").style.display!=="none";
   if(needBatch){selBatch=el("manualBatch").value.trim();}
   selStudent={name:el("manualName").value.trim(),ims_id:el("manualPin").value.trim()};
-  extracted=null;hide("card4");
+  extracted=null;photoData=null;hide("card4");
   el("pinVal").textContent=selStudent.ims_id;
   show("pinRow");show("card3");setStep(3);
   resetUpload();hide("errBar");
+  resetPhotoZone();hide("photoErrBar");
 }
 
 function resetUpload(){
@@ -304,6 +319,63 @@ function resetUpload(){
   uz.className="upload-zone";
   uz.innerHTML="<div class='upload-icon'>&#128228;</div><div class='upload-main'>Click to upload PDF</div><div class='upload-sub'>CAT 2026 registration form only</div>";
   el("fileIn").value="";
+}
+
+function resetPhotoZone(){
+  photoData=null;
+  const pz=el("photoZone");
+  pz.className="upload-zone";
+  pz.innerHTML="<div class='upload-icon'>&#128247;</div><div class='upload-main'>Click to upload your photo</div><div class='upload-sub'>JPG or PNG</div>";
+  el("photoIn").value="";
+}
+
+function checkBothReady(){
+  if(extracted&&photoData){renderPreview();}
+}
+
+function resizeImage(file,maxDim,quality){
+  return new Promise(function(resolve,reject){
+    const reader=new FileReader();
+    reader.onload=function(e){
+      const img=new Image();
+      img.onload=function(){
+        let w=img.width,h=img.height;
+        if(w>maxDim||h>maxDim){
+          if(w>h){h=Math.round(h*maxDim/w);w=maxDim;}else{w=Math.round(w*maxDim/h);h=maxDim;}
+        }
+        const canvas=document.createElement("canvas");
+        canvas.width=w;canvas.height=h;
+        canvas.getContext("2d").drawImage(img,0,0,w,h);
+        const dataUrl=canvas.toDataURL("image/jpeg",quality);
+        resolve({dataUrl:dataUrl,base64:dataUrl.split(",")[1],mime:"image/jpeg"});
+      };
+      img.onerror=function(){reject(new Error("Could not read image."));};
+      img.src=e.target.result;
+    };
+    reader.onerror=function(){reject(new Error("Could not read file."));};
+    reader.readAsDataURL(file);
+  });
+}
+
+async function onPhoto(input){
+  var file=input.files[0];if(!file)return;
+  if(!file.type||file.type.indexOf("image/")!==0){el("photoErrBar").textContent="Please upload an image file (JPG or PNG).";show("photoErrBar");return;}
+  hide("photoErrBar");hide("card4");
+  var pz=el("photoZone");
+  pz.className="upload-zone loading";
+  pz.innerHTML="<span class='spinner'></span><div class='upload-main'>Processing photo&hellip;</div>";
+  try{
+    var r=await resizeImage(file,800,0.82);
+    photoData={base64:r.base64,mime:r.mime,filename:file.name};
+    pz.className="upload-zone ready";
+    pz.innerHTML="<img src='"+r.dataUrl+"' style='width:72px;height:72px;object-fit:cover;border-radius:8px;margin-bottom:6px'/><div class='upload-main'>Photo uploaded</div><div class='upload-sub'>Click to change</div>";
+    checkBothReady();
+  }catch(e){
+    resetPhotoZone();
+    el("photoErrBar").textContent="Error: "+(e&&e.message?e.message:String(e));
+    show("photoErrBar");
+    console.error(e);
+  }
 }
 
 async function onFile(input){
@@ -348,7 +420,7 @@ async function onFile(input){
     extracted=JSON.parse(raw.replace(/```json|```/g,"").trim());
     uz.className="upload-zone ready";
     uz.innerHTML="<div class='upload-icon'>&#9989;</div><div class='upload-main'>"+file.name+"</div><div class='upload-sub'>Click to re-upload</div>";
-    renderPreview();
+    checkBothReady();
   }catch(e){
     resetUpload();
     el("errBar").textContent="Error: "+(e&&e.message?e.message:String(e));
@@ -358,6 +430,7 @@ async function onFile(input){
 }
 
 function renderPreview(){
+  if(photoData){el("reviewPhoto").src="data:"+photoData.mime+";base64,"+photoData.base64;show("reviewPhotoWrap");}else{hide("reviewPhotoWrap");}
   el("banner").innerHTML=[["Name",selStudent.name],["Batch",selBatch],["IMS PIN",selStudent.ims_id]].map(function(x){
     return "<div class='b-item'><div class='b-label'>"+x[0]+"</div><div class='b-val'>"+x[1]+"</div></div>";
   }).join("");
@@ -379,7 +452,7 @@ async function onSubmit(){
   el("submitBtn").disabled=true;
   el("submitBtn").innerHTML="<span class='spinner spinner-dark'></span> Submitting&hellip;";
   try{
-    const payload={timestamp:new Date().toLocaleString("en-IN"),name:selStudent.name,batch:selBatch,imsPin:selStudent.ims_id,catUserId:extracted.catUserId,dob:extracted.dateOfBirth,email:extracted.primaryEmail,mobile:extracted.mobile,tenth:extracted.tenth,twelfth:extracted.twelfth,gradDegree:extracted.gradDegree,gradDegreeOthers:extracted.gradDegreeOthers,gradCollege:extracted.gradCollege,gradUniversity:extracted.gradUniversity,gradUniversityOthers:extracted.gradUniversityOthers,gradPercentage:extracted.gradPercentage,mastersOrPro:extracted.mastersOrPro,workExMonths:extracted.workExMonths,category:extracted.category};
+    const payload={timestamp:new Date().toLocaleString("en-IN"),name:selStudent.name,batch:selBatch,imsPin:selStudent.ims_id,catUserId:extracted.catUserId,dob:extracted.dateOfBirth,email:extracted.primaryEmail,mobile:extracted.mobile,tenth:extracted.tenth,twelfth:extracted.twelfth,gradDegree:extracted.gradDegree,gradDegreeOthers:extracted.gradDegreeOthers,gradCollege:extracted.gradCollege,gradUniversity:extracted.gradUniversity,gradUniversityOthers:extracted.gradUniversityOthers,gradPercentage:extracted.gradPercentage,mastersOrPro:extracted.mastersOrPro,workExMonths:extracted.workExMonths,category:extracted.category,photoBase64:photoData?photoData.base64:"",photoMime:photoData?photoData.mime:"",photoFilename:photoData?(selStudent.ims_id+".jpg"):""};
     var sr=await fetch(APPS_SCRIPT_URL,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},body:JSON.stringify(Object.assign({action:"submit"},payload))});
     var st=await sr.text();
     if(st!=="OK")throw new Error(st);
